@@ -4,6 +4,11 @@ from fastapi import FastAPI
 app = FastAPI()
 DB_PATH = 'comandos.db'
 
+@app.get("/")
+def get_root():
+    """Retorna uma mensagem de boas-vindas na raiz da API."""
+    return {"mensagem": "Bem-vindo à API de Comandos! Acesse /comandos para ver os dados."}
+
 def get_db_connection():
     """Cria uma conexão com o banco de dados"""
     conn = sqlite3.connect(DB_PATH)
@@ -44,6 +49,3 @@ def get_comandos_por_topico(nome_topico: str):
     except Exception as e:
         return {"erro": str(e)}, 500
     
-
-    # comando para rodar a aplicação:
-    # python -m uvicorn main:app --reload
