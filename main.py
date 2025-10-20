@@ -1,8 +1,14 @@
+# -*- coding: utf-8 -*-
+
 import sqlite3
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Security, Depends
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from typing import Optional
 
+# --- Modelos de Dados (Pydantic) ---
+# Usamos modelos para que a API saiba quais dados esperar.
+# Isso garante validação automática e documentação.
 
 class Comando(BaseModel):
     """Modelo para receber dados ao criar ou atualizar um comando."""
@@ -18,53 +24,89 @@ class ComandoComId(Comando):
     """Modelo para retornar um comando que já existe no banco (com ID)."""
     id: int
 
+
+# --- Aplicação FastAPI ---
 app = FastAPI()
 DB_PATH = 'comandos.db'
 
+# --- Segurança (API Key) ---
+# ATENÇÃO: Em um projeto real, NUNCA deixe a chave no código.
+# Use variáveis de ambiente para maior segurança.
+API_KEY = "SEU_TOKEN_SUPER_SECRETO_12345"
+API_KEY_NAME = "X-API-Key"
+
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+async def get_api_key(api_key_header: str = Security(api_key_header)):
+    """Verifica se a chave da API enviada no header é válida."""
+    if api_key_header == API_KEY:
+        return api_key_header
+    else:
+        raise HTTPException(
+            status_code=401,
+            detail="Chave de API inválida ou ausente. Forneça a chave no header 'X-API-Key'.",
+        )
+
+# --- Funções do Banco de Dados ---
 def get_db_connection():
     """Cria e retorna uma conexão com o banco de dados."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
+# --- Endpoints da API (Operações CRUD) ---
+
 @app.get("/")
 def get_root():
     """Endpoint raiz com mensagem de boas-vindas."""
     return {"mensagem": "Bem-vindo à API de Comandos! Use /docs para ver a documentação."}
 
+# --- READ (Ler - Público) ---
+
 @app.get("/comandos", response_model=list[ComandoComId])
 def get_todos_comandos():
-    """Busca todos os comandos no banco de dados."""
+    """Busca todos os comandos no banco de dados. (Público)"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM comandos")
-        comandos = cursor.fetchall()
+        
+        # Converte o resultado em uma lista de dicionários
+        comandos_rows = cursor.fetchall()
+        comandos_list = [dict(row) for row in comandos_rows]
+        
         conn.close()
-        return comandos
+        return comandos_list
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/comandos/topico/{nome_topico}", response_model=list[ComandoComId])
 def get_comandos_por_topico(nome_topico: str):
-    """Busca comandos filtrando por um tópico específico."""
+    """Busca comandos filtrando por um tópico específico. (Público)"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM comandos WHERE topico LIKE ?", (f'%{nome_topico}%',))
-        comandos = cursor.fetchall()
-        conn.close()
-        if not comandos:
+        
+        # Converte o resultado em uma lista de dicionários
+        comandos_rows = cursor.fetchall()
+        if not comandos_rows:
             raise HTTPException(status_code=404, detail="Nenhum comando encontrado para este tópico")
-        return comandos
+        
+        comandos_list = [dict(row) for row in comandos_rows]
+        
+        conn.close()
+        return comandos_list
     except Exception as e:
         if not isinstance(e, HTTPException):
             raise HTTPException(status_code=500, detail=str(e))
         raise e
 
+# --- CREATE (Criar - Protegido) ---
+
 @app.post("/comandos", response_model=ComandoComId, status_code=201)
-def create_comando(comando: Comando):
-    """Adiciona um novo comando ao banco de dados."""
+def create_comando(comando: Comando, api_key: str = Depends(get_api_key)):
+    """Adiciona um novo comando ao banco de dados. (Protegido por API Key)"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -82,9 +124,11 @@ def create_comando(comando: Comando):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao criar comando: {e}")
 
+# --- UPDATE (Atualizar - Protegido) ---
+
 @app.put("/comandos/{comando_id}", response_model=ComandoComId)
-def update_comando(comando_id: int, comando: Comando):
-    """Atualiza um comando existente no banco de dados pelo seu ID."""
+def update_comando(comando_id: int, comando: Comando, api_key: str = Depends(get_api_key)):
+    """Atualiza um comando existente no banco de dados. (Protegido por API Key)"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -99,7 +143,6 @@ def update_comando(comando_id: int, comando: Comando):
         )
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail=f"Comando com ID {comando_id} não encontrado")
-
         conn.commit()
         conn.close()
         return {**comando.dict(), "id": comando_id}
@@ -108,17 +151,17 @@ def update_comando(comando_id: int, comando: Comando):
             raise HTTPException(status_code=500, detail=f"Erro ao atualizar comando: {e}")
         raise e
 
+# --- DELETE (Excluir - Protegido) ---
+
 @app.delete("/comandos/{comando_id}")
-def delete_comando(comando_id: int):
-    """Exclui um comando do banco de dados pelo seu ID."""
+def delete_comando(comando_id: int, api_key: str = Depends(get_api_key)):
+    """Exclui um comando do banco de dados. (Protegido por API Key)"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("DELETE FROM comandos WHERE id = ?", (comando_id,))
-
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail=f"Comando com ID {comando_id} não encontrado")
-
         conn.commit()
         conn.close()
         return {"mensagem": f"Comando com ID {comando_id} foi deletado com sucesso"}
@@ -126,3 +169,4 @@ def delete_comando(comando_id: int):
         if not isinstance(e, HTTPException):
             raise HTTPException(status_code=500, detail=f"Erro ao deletar comando: {e}")
         raise e
+
