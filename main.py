@@ -1,14 +1,23 @@
-# -*- coding: utf-8 -*-
-
 import sqlite3
 from fastapi import FastAPI, HTTPException, Security, Depends
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from typing import Optional
 
-# --- Modelos de Dados (Pydantic) ---
-# Usamos modelos para que a API saiba quais dados esperar.
-# Isso garante validação automática e documentação.
+from dotenv import load_dotenv
+from pathlib import Path
+import os
+
+env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=env_path)
+
+DB_PATH = os.getenv("DB_PATH", "comandos.db")
+API_KEY = os.getenv("API_KEY")
+API_KEY_NAME = os.getenv("API_KEY_NAME", "X-API-Key")
+
+DB_PATH = DB_PATH.strip(" '\"") if DB_PATH else "comandos.db"
+API_KEY = API_KEY.strip(" '\"") if API_KEY else None
+API_KEY_NAME = API_KEY_NAME.strip(" '\"") if API_KEY_NAME else "X-API-Key"
 
 class Comando(BaseModel):
     """Modelo para receber dados ao criar ou atualizar um comando."""
@@ -23,17 +32,7 @@ class Comando(BaseModel):
 class ComandoComId(Comando):
     """Modelo para retornar um comando que já existe no banco (com ID)."""
     id: int
-
-
-# --- Aplicação FastAPI ---
 app = FastAPI()
-DB_PATH = 'comandos.db'
-
-# --- Segurança (API Key) ---
-# ATENÇÃO: Em um projeto real, NUNCA deixe a chave no código.
-# Use variáveis de ambiente para maior segurança.
-API_KEY = "SEU_TOKEN_SUPER_SECRETO_12345"
-API_KEY_NAME = "X-API-Key"
 
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
