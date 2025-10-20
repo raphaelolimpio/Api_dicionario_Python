@@ -1,0 +1,5 @@
+pip install fastapi "uvicorn[standard]" -  biblioteca para gerar api localmente
+
+python -m uvicorn main:app --reload - comando para rodar a api
+
+pip freeze > requirements.txt - comando para gerar arquivo para listar as bibliotecas necessarias
