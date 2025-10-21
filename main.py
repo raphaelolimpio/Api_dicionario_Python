@@ -3,6 +3,9 @@ from fastapi import FastAPI, HTTPException, Security, Depends
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from typing import Optional
+from fastapi.middleware.cors import CORSMiddleware
+
+
 
 from dotenv import load_dotenv
 from pathlib import Path
@@ -10,6 +13,8 @@ import os
 
 env_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=env_path)
+
+
 
 DB_PATH = os.getenv("DB_PATH", "comandos.db")
 API_KEY = os.getenv("API_KEY")
@@ -33,6 +38,14 @@ class ComandoComId(Comando):
     """Modelo para retornar um comando que já existe no banco (com ID)."""
     id: int
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
