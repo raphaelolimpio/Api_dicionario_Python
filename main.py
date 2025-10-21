@@ -37,8 +37,18 @@ class Comando(BaseModel):
 class ComandoComId(Comando):
     """Modelo para retornar um comando que já existe no banco (com ID)."""
     id: int
-app = FastAPI()
 
+class ComandoAgrupado(BaseModel):
+    """Modelo para o comando dentro da lista agrupada (sem o tópico e com id)."""
+    id: int
+    nome: Optional[str] = None
+    categoria: Optional[str] = None
+    definicao: Optional[str] = None
+    comando_exemplo: Optional[str] = None
+    explicacao_pratica: Optional[str] = None
+    dicas_de_uso: Optional[str] = None
+
+app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -59,22 +69,20 @@ async def get_api_key(api_key_header: str = Security(api_key_header)):
             detail="Chave de API inválida ou ausente. Forneça a chave no header 'X-API-Key'.",
         )
 
-# --- Funções do Banco de Dados ---
 def get_db_connection():
     """Cria e retorna uma conexão com o banco de dados."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
-# --- Endpoints da API (Operações CRUD) ---
 
 @app.get("/")
 def get_root():
     """Endpoint raiz com mensagem de boas-vindas."""
     return {"mensagem": "Bem-vindo à API de Comandos! Use /docs para ver a documentação."}
 
-# --- READ (Ler - Público) ---
 
+# ---ENDPOINT PARA LISTAR TODOS OS COMANDOS ---
 @app.get("/comandos", response_model=list[ComandoComId])
 def get_todos_comandos():
     """Busca todos os comandos no banco de dados. (Público)"""
@@ -82,8 +90,6 @@ def get_todos_comandos():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM comandos")
-        
-        # Converte o resultado em uma lista de dicionários
         comandos_rows = cursor.fetchall()
         comandos_list = [dict(row) for row in comandos_rows]
         
@@ -91,7 +97,7 @@ def get_todos_comandos():
         return comandos_list
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
+# ---ENDPOINT PARA FILTRAR COMANDOS POR TÓPICO ---
 @app.get("/comandos/topico/{nome_topico}", response_model=list[ComandoComId])
 def get_comandos_por_topico(nome_topico: str):
     """Busca comandos filtrando por um tópico específico. (Público)"""
@@ -99,8 +105,6 @@ def get_comandos_por_topico(nome_topico: str):
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM comandos WHERE topico LIKE ?", (f'%{nome_topico}%',))
-        
-        # Converte o resultado em uma lista de dicionários
         comandos_rows = cursor.fetchall()
         if not comandos_rows:
             raise HTTPException(status_code=404, detail="Nenhum comando encontrado para este tópico")
@@ -113,6 +117,45 @@ def get_comandos_por_topico(nome_topico: str):
         if not isinstance(e, HTTPException):
             raise HTTPException(status_code=500, detail=str(e))
         raise e
+# ---ENDPOINT PARA LISTA DE TÓPICOS ---
+@app.get("/topicos", response_model=list[str])
+def get_topicos():
+    """Busca todos os nomes de tópicos únicos no banco de dados."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT DISTINCT topico FROM comandos ORDER BY topico")
+        topicos_rows = cursor.fetchall()
+        topicos_list = [row[0] for row in topicos_rows]
+        
+        conn.close()
+        return topicos_list
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+# ---ENDPOINT PARA COMANDOS AGRUPADOS ---   
+@app.get("/comandos/agrupados", response_model=dict[str, list[ComandoAgrupado]])
+def get_comandos_agrupados_por_topico():
+    """Busca todos os comandos e os retorna agrupados por tópico."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM comandos ORDER BY topico, id")
+        comandos_rows = cursor.fetchall()
+        conn.close()
+        comandos_agrupados = {}
+
+        for row in comandos_rows:
+            comando_dict = dict(row) 
+            topico_nome = comando_dict.pop('topico') 
+            comando_item = ComandoAgrupado(**comando_dict)
+            if topico_nome not in comandos_agrupados:
+                comandos_agrupados[topico_nome] = []
+            comandos_agrupados[topico_nome].append(comando_item)
+        
+        return comandos_agrupados
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # --- CREATE (Criar - Protegido) ---
 
