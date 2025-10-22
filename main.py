@@ -98,7 +98,7 @@ def get_todos_comandos():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 # ---ENDPOINT PARA FILTRAR COMANDOS POR TÓPICO ---
-@app.get("/comandos/topico/{nome_topico}", response_model=list[ComandoComId])
+@app.get("/comandos/topico/{nome_topico:path}", response_model=list[ComandoComId])
 def get_comandos_por_topico(nome_topico: str):
     """Busca comandos filtrando por um tópico específico. (Público)"""
     try:
