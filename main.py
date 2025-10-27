@@ -95,7 +95,7 @@ def get_todos_comandos(nome: Optional[str] = None):
         query = "SELECT * FROM comandos"
         params = []
         if nome:
-            query += "WHERE nome LIKE ?"
+            query += " WHERE nome LIKE ?"
             params.append(f'%{nome}%')
 
         cursor.execute(query, params)
