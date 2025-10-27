@@ -84,12 +84,21 @@ def get_root():
 
 # ---ENDPOINT PARA LISTAR TODOS OS COMANDOS ---
 @app.get("/comandos", response_model=list[ComandoComId])
-def get_todos_comandos():
-    """Busca todos os comandos no banco de dados. (Público)"""
+def get_todos_comandos(nome: Optional[str] = None):
+    """Busca todos os comandos no banco de dados. (Público)
+    poder ser filtrado por nome com o query param ?nome=...
+    """
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM comandos")
+
+        query = "SELECT * FROM comandos"
+        params = []
+        if nome:
+            query += "WHERE nome LIKE ?"
+            params.append(f'%{nome}%')
+
+        cursor.execute(query, params)
         comandos_rows = cursor.fetchall()
         comandos_list = [dict(row) for row in comandos_rows]
         
@@ -97,15 +106,27 @@ def get_todos_comandos():
         return comandos_list
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
 # ---ENDPOINT PARA FILTRAR COMANDOS POR TÓPICO ---
 @app.get("/comandos/topico/{nome_topico:path}", response_model=list[ComandoComId])
-def get_comandos_por_topico(nome_topico: str):
-    """Busca comandos filtrando por um tópico específico. (Público)"""
+def get_comandos_por_topico(nome_topico: str, nome: Optional[str] = None):
+    """Busca comandos filtrando por um tópico específico. (Público)
+        Pode ser filtrado *tambem* por nome com o query param ?nome=...
+    """
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM comandos WHERE topico LIKE ?", (f'%{nome_topico}%',))
+
+        query = "SELECT * FROM comandos WHERE topico LIKE ?"
+        params = [f'%{nome_topico}%']
+
+        if nome:
+            query += " AND nome LIKE ?"
+            params.append(f'%{nome}%')
+
+        cursor.execute(query, params)
         comandos_rows = cursor.fetchall()
+        comandos_list = [dict(row) for row in comandos_rows]
         if not comandos_rows:
             raise HTTPException(status_code=404, detail="Nenhum comando encontrado para este tópico")
         
